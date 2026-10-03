@@ -7,7 +7,13 @@ export async function POST(request: Request) {
   // Each caller supplies their own token. Same-origin validation limits browser misuse;
   // it is not authentication. Tokens and feed snapshots are never stored.
   const origin = request.headers.get("origin");
-  if (!origin || origin !== new URL(request.url).origin) return json({ error: "Use the feed connection inside the scanner." }, 403);
+  // Next.js may construct request.url using its internal listening address.
+  // Host retains the address the browser opened (localhost, LAN IP or HTTPS).
+  const urlOrigin = new URL(request.url);
+  const host = request.headers.get("host") || urlOrigin.host;
+  const protocol = request.headers.get("x-forwarded-proto")?.split(",")[0].trim() || urlOrigin.protocol.slice(0, -1);
+  const expectedOrigin = `${protocol}://${host}`;
+  if (!["http", "https"].includes(protocol) || !origin || origin !== expectedOrigin) return json({ error: "Use the feed connection inside the scanner." }, 403);
   const token = request.headers.get("x-flow-token")?.trim();
   if (!token || token.length < 8 || token.length > 512 || /[\s\x00-\x1f]/.test(token)) return json({ error: "Enter a valid API token from your Unusual Whales API account." }, 400);
   if (!request.headers.get("content-type")?.includes("application/json")) return json({ error: "Expected a JSON request." }, 415);

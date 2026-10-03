@@ -74,6 +74,14 @@ response = await POST(request({}, 'https://scanner.test', 'bad'));
 check('bad token rejected before provider call', () => { assert.equal(response.status, 400); assert.equal(called, 1); });
 response = await POST(request({ limit: 999 }));
 check('invalid limit rejected before provider call', () => { assert.equal(response.status, 400); assert.equal(called, 1); });
+for (const host of ['localhost:3000', '192.168.1.20:3000']) {
+  response = await POST(new Request('http://0.0.0.0:3000/api/flow', { method: 'POST', headers: { host, origin: `http://${host}`, 'x-forwarded-proto': 'http', 'content-type': 'application/json', 'x-flow-token': 'bad' }, body: '{}' }));
+  check(`browser Host works despite internal URL (${host})`, () => assert.equal(response.status, 400));
+}
+response = await POST(new Request('http://internal:3000/api/flow', { method: 'POST', headers: { host: 'scanner.test', origin: 'https://scanner.test', 'x-forwarded-proto': 'https', 'content-type': 'application/json', 'x-flow-token': 'bad' }, body: '{}' }));
+check('HTTPS proxy origin reaches token validation', () => assert.equal(response.status, 400));
+response = await POST(new Request('http://internal:3000/api/flow', { method: 'POST', headers: { host: 'scanner.test', origin: 'https://other.test', 'x-forwarded-proto': 'https', 'content-type': 'application/json', 'x-flow-token': 'dummy-test-token' }, body: '{}' }));
+check('Host validation still rejects a different browser origin', () => { assert.equal(response.status, 403); assert.equal(called, 1); });
 globalThis.fetch = async () => new Response('', { status: 401 }); response = await POST(request());
 check('provider authentication failure is actionable', () => assert.equal(response.status, 401));
 globalThis.fetch = async () => new Response('', { status: 429 }); response = await POST(request());
